@@ -9,16 +9,15 @@ import com.riskified.validations.IValidated;
 import com.riskified.validations.Validation;
 import org.apache.http.HttpHeaders;
 import org.apache.http.HttpHost;
-import org.apache.http.HttpResponse;
 import org.apache.http.auth.AUTH;
 import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.MalformedChallengeException;
 import org.apache.http.auth.UsernamePasswordCredentials;
 import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.CredentialsProvider;
-import org.apache.http.client.HttpClient;
 import org.apache.http.client.HttpResponseException;
 import org.apache.http.client.config.RequestConfig;
+import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.protocol.HttpClientContext;
 import org.apache.http.entity.ByteArrayEntity;
@@ -26,6 +25,7 @@ import org.apache.http.entity.ContentType;
 import org.apache.http.impl.auth.BasicScheme;
 import org.apache.http.impl.client.BasicAuthCache;
 import org.apache.http.impl.client.BasicCredentialsProvider;
+import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.impl.client.ProxyAuthenticationStrategy;
 import org.apache.http.message.BasicHeader;
@@ -861,29 +861,36 @@ public class RiskifiedClient {
     private Response postCheckoutOrder(Object data, String url) throws IOException, FieldBadFormatException {
         HttpPost request = createPostRequest(url);
         addDataToRequest(data, request);
-        HttpResponse response;
-        HttpClient client = constructHttpClient();
-        response = executeClient(client, request);
-        String postBody = EntityUtils.toString(response.getEntity(), "UTF-8");
-        int status = response.getStatusLine().getStatusCode();
-        Response responseObject = getCheckoutResponseObject(postBody);
-        switch (status) {
-            case 200:
-                return responseObject;
-            case 400:
-                throw new HttpResponseException(status, responseObject.getError().getMessage());
-            case 401:
-                throw new HttpResponseException(status, responseObject.getError().getMessage());
-            case 404:
-                throw new HttpResponseException(status, responseObject.getError().getMessage());
-            case 504:
-                throw new HttpResponseException(status, "Temporary error, please retry");
-            default:
-                throw new HttpResponseException(500, "Contact Riskified support");
+        CloseableHttpClient client = constructHttpClient();
+        try {
+            CloseableHttpResponse response = executeClient(client, request);
+            try {
+                String postBody = EntityUtils.toString(response.getEntity(), "UTF-8");
+                int status = response.getStatusLine().getStatusCode();
+                Response responseObject = getCheckoutResponseObject(postBody);
+                switch (status) {
+                    case 200:
+                        return responseObject;
+                    case 400:
+                        throw new HttpResponseException(status, responseObject.getError().getMessage());
+                    case 401:
+                        throw new HttpResponseException(status, responseObject.getError().getMessage());
+                    case 404:
+                        throw new HttpResponseException(status, responseObject.getError().getMessage());
+                    case 504:
+                        throw new HttpResponseException(status, "Temporary error, please retry");
+                    default:
+                        throw new HttpResponseException(500, "Contact Riskified support");
+                }
+            } finally {
+                response.close();
+            }
+        } finally {
+            client.close();
         }
     }
 
-	private HttpClient constructHttpClient() {
+	private CloseableHttpClient constructHttpClient() {
 		RequestConfig.Builder requestBuilder = RequestConfig.custom()
 				.setConnectTimeout(connectionTimeout)
 				.setConnectionRequestTimeout(requestTimeout)
@@ -903,9 +910,9 @@ public class RiskifiedClient {
 		return builder.build();
 	}
 
-	private HttpResponse executeClient(HttpClient client, HttpPost request)
+	private CloseableHttpResponse executeClient(CloseableHttpClient client, HttpPost request)
 			throws IOException {
-		HttpResponse response;
+		CloseableHttpResponse response;
 
 		if (context != null) {
 			response = client.execute(request, context);
@@ -974,27 +981,34 @@ public class RiskifiedClient {
     private Response postOrder(Object data, String url) throws IOException {
         HttpPost request = createPostRequest(url);
         addDataToRequest(data, request);
-        HttpResponse response;
-        HttpClient client = constructHttpClient();
-        response = executeClient(client, request);
-        String postBody = EntityUtils.toString(response.getEntity());
-        int status = response.getStatusLine().getStatusCode();
+        CloseableHttpClient client = constructHttpClient();
+        try {
+            CloseableHttpResponse response = executeClient(client, request);
+            try {
+                String postBody = EntityUtils.toString(response.getEntity());
+                int status = response.getStatusLine().getStatusCode();
 
-        Response responseObject = getResponseObject(postBody);
-        switch (status) {
-	        case 200:
-	            return responseObject;
-	        case 400:
-	            throw new HttpResponseException(status, postBody);
-	        case 401:
-	            throw new HttpResponseException(status, postBody);
-	        case 404:
-	            throw new HttpResponseException(status, postBody);
-	        case 504:
-	            throw new HttpResponseException(status, "Temporary error, please retry");
-	        default:
-	            throw new HttpResponseException(500, "Contact Riskified support");
-	    }
+                Response responseObject = getResponseObject(postBody);
+                switch (status) {
+                    case 200:
+                        return responseObject;
+                    case 400:
+                        throw new HttpResponseException(status, postBody);
+                    case 401:
+                        throw new HttpResponseException(status, postBody);
+                    case 404:
+                        throw new HttpResponseException(status, postBody);
+                    case 504:
+                        throw new HttpResponseException(status, "Temporary error, please retry");
+                    default:
+                        throw new HttpResponseException(500, "Contact Riskified support");
+                }
+            } finally {
+                response.close();
+            }
+        } finally {
+            client.close();
+        }
     }
 
     private Response getResponseObject(String postBody) throws IOException {
